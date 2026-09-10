@@ -1,0 +1,62 @@
+{
+  "run_id": "15288c0b7b4f",
+  "question": "How does top-k retrieval work in this project?",
+  "answer": "[writer] How does top-k retrieval work in this project? — supported by [retrieval.md#2], [agents.md#1], [retrieval.md#1], [retrieval.md#0]",
+  "citations": [
+    "retrieval.md#2",
+    "agents.md#1",
+    "retrieval.md#1",
+    "retrieval.md#0"
+  ],
+  "plan": [
+    {
+      "id": "s1",
+      "question": "What do the sources say about How does top-k retrieval work in this project?",
+      "agent": "researcher"
+    },
+    {
+      "id": "s2",
+      "question": "What follows from that for How does top-k retrieval work in this project?",
+      "agent": "analyst"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "s1",
+      "agent": "researcher",
+      "answer": "[researcher] What do the sources say about How does top-k retrieval work in this project? — supported by [retrieval.md#2], [agents.md#1], [retrieval.md#1], [retrieval.md#0]",
+      "citations": [
+        "retrieval.md#2",
+        "agents.md#1",
+        "retrieval.md#1",
+        "retrieval.md#0"
+      ],
+      "steps": 2,
+      "parse_failures": 0,
+      "tool_errors": 0,
+      "ok": true
+    },
+    {
+      "id": "s2",
+      "agent": "analyst",
+      "answer": "[analyst] What follows from that for How does top-k retrieval work in this project? — supported by [agents.md#1], [retrieval.md#0], [retrieval.md#1]",
+      "citations": [
+        "agents.md#1",
+        "retrieval.md#0",
+        "retrieval.md#1"
+      ],
+      "steps": 1,
+      "parse_failures": 0,
+      "tool_errors": 0,
+      "ok": true
+    }
+  ],
+  "critique": {
+    "approved": true,
+    "issues": [],
+    "answer": "looks supported"
+  },
+  "revised": false,
+  "parse_failures": 0,
+  "tool_errors": 0
+}

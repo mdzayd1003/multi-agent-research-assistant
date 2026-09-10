@@ -1,0 +1,8 @@
+# Heavier extras. Not needed for the offline path or the tests.
+#   sentence-transformers -> MiniLM embeddings instead of the hashing embedder
+#   faiss-cpu             -> FAISS IndexFlatIP instead of the numpy store
+#   langchain-*           -> only if you want to swap the hand-written pieces out
+sentence-transformers>=2.2
+faiss-cpu>=1.7
+langchain-core>=0.1
+langchain-community>=0.0.20
