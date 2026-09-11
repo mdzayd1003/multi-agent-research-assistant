@@ -1,5 +1,7 @@
 # 01 — Multi-Agent Research Assistant with RAG
 
+**[▶ Live demo](https://mdzayd1003.github.io/multi-agent-research-assistant/)** — interactive results viewer, runs entirely in the browser.
+
 An orchestrator that splits a research question into subtasks, hands them to
 specialist agents over a single JSON tool-calling contract, and assembles a
 cited answer. The retrieval side is written from scratch rather than imported,

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="The from-scratch RAG retrieval pipeline running in the browser: splitting, hashed embeddings and exact cosine search.">
+<title>Corpus retrieval demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23101A24'/%3E%3Cpath d='M18 74 L50 26 L82 74' fill='none' stroke='%23C08828' stroke-width='9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{--ground:#E8EAE6;--surface:#F2F4F0;--sunk:#DFE2DC;--ink:#16202A;--ink-2:#46525D;--ink-3:#6C7780;
+--rule:#CDD2CB;--rule-2:#B9BFB7;--brass:#B0771B;--brass-b:#8E5F13;--signal:#1361A8;--plot:#0D1620;
+--top:#101A24;--top-ink:#EDF0F2;--top-ink2:#A3B1BE;--top-ink3:#74848F;--top-rule:#26343F;
+--top-brass:#C08828;--top-sig:#5A97E0;
+--sans:"Archivo","Helvetica Neue",Arial,sans-serif;--serif:"Newsreader",Georgia,serif;
+--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;--gutter:clamp(18px,4vw,48px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--ground:#101A24;--surface:#16212C;
+--sunk:#0B131B;--ink:#E4E8EA;--ink-2:#A2B0BB;--ink-3:#74848F;--rule:#26343F;--rule-2:#33434F;
+--brass:#C08828;--brass-b:#D8A044;--signal:#5A97E0;--top:#0B131B;--top-rule:#22303B}}
+:root[data-theme=dark]{--ground:#101A24;--surface:#16212C;--sunk:#0B131B;--ink:#E4E8EA;--ink-2:#A2B0BB;
+--ink-3:#74848F;--rule:#26343F;--rule-2:#33434F;--brass:#C08828;--brass-b:#D8A044;--signal:#5A97E0;
+--top:#0B131B;--top-rule:#22303B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--serif);font-size:16.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
+img{max-width:100%;height:auto}
+h1,h2,h3{font-family:var(--sans);font-weight:600;font-stretch:112%;letter-spacing:-.012em;margin:0;text-wrap:balance}
+a{color:inherit;text-decoration-color:var(--rule-2);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--brass)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+.wrap{max-width:1100px;margin-inline:auto;padding-inline:var(--gutter)}
+.top{background:var(--top);color:var(--top-ink);border-bottom:1px solid var(--top-rule)}
+.top .wrap{padding-block:clamp(24px,4vw,40px) clamp(20px,3vw,30px)}
+.top h1{font-size:clamp(1.6rem,4vw,2.5rem);margin-top:10px}
+.crumbs{font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--top-ink3);display:flex;gap:8px;flex-wrap:wrap}
+.crumbs a{color:var(--top-ink2);text-decoration:none}
+.crumbs a:hover{color:var(--top-brass)}
+.sub{color:var(--top-ink2);max-width:62ch;margin:10px 0 0;font-size:1.02rem}
+main.wrap{padding-block:clamp(26px,4vw,44px) clamp(30px,5vw,56px)}
+.bot{background:var(--top);color:var(--top-ink2);border-top:1px solid var(--top-rule)}
+.bot .wrap{padding-block:26px;font-family:var(--mono);font-size:12px}
+.bot a{color:var(--top-ink)}
+.bot .note{color:var(--top-ink3);max-width:70ch;line-height:1.7;margin:0 0 12px}
+section{margin-bottom:clamp(28px,4vw,44px)}
+h2{font-size:clamp(1.15rem,2.4vw,1.45rem);margin-bottom:14px}
+.lead{color:var(--ink-2);max-width:70ch;margin:0 0 18px}
+.panel{border:1px solid var(--rule);background:var(--surface)}
+.eyebrow{font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
+.grid2{display:grid;grid-template-columns:280px minmax(0,1fr);gap:clamp(16px,3vw,28px);align-items:start}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(16px,3vw,28px);align-items:start}
+@media(max-width:760px){.two{grid-template-columns:1fr}}
+.controls{padding:18px 18px 20px;display:flex;flex-direction:column;gap:16px}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);margin-bottom:6px}
+.ctl b{color:var(--brass-b);font-weight:600;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--brass);cursor:pointer}
+select,input[type=text]{width:100%;font-family:var(--mono);font-size:13px;padding:8px 10px;background:var(--ground);color:var(--ink);border:1px solid var(--rule-2);border-radius:0}
+textarea{width:100%;font-family:var(--mono);font-size:13.5px;line-height:1.6;padding:10px 12px;background:var(--ground);color:var(--ink);border:1px solid var(--rule-2);border-radius:0;resize:vertical}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin-bottom:14px}
+.readout div{background:var(--surface);padding:12px 14px}
+.readout .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.readout .v{font-family:var(--sans);font-size:1.32rem;font-weight:600;font-variant-numeric:tabular-nums;margin-top:3px}
+.readout .v.brass{color:var(--brass-b)}
+.plotbox{border:1px solid var(--top-rule);background:var(--plot);padding:8px}
+.plotbox svg{display:block;width:100%;height:auto}
+.legend{display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-bottom:8px;flex-wrap:wrap}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:middle}
+table{width:100%;border-collapse:collapse;font-size:14px}
+.scroll{overflow-x:auto;border:1px solid var(--rule)}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--sunk)}
+td{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.name{color:var(--ink);font-weight:500}
+tr:last-child td{border-bottom:none}
+.bar{height:8px;background:var(--brass);display:block;border-radius:1px}
+.bar.sig{background:var(--signal)}
+.tag{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border:1px solid var(--rule-2);color:var(--ink-3)}
+.tag.on{border-color:var(--brass);color:var(--brass-b)}
+.note{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--ink-3);max-width:72ch}
+.note b{color:var(--brass-b);font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{font-family:var(--mono);font-size:11.5px;padding:6px 11px;border:1px solid var(--rule-2);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.chip[aria-pressed=true]{border-color:var(--brass);color:var(--brass-b);background:var(--sunk)}
+mark{background:color-mix(in srgb,var(--brass) 26%,transparent);color:inherit;padding:1px 2px}
+mark.sig{background:color-mix(in srgb,var(--signal) 24%,transparent)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.hit{border:1px solid var(--rule);background:var(--surface);padding:0 0 14px;margin-bottom:12px}
+.hh{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--sunk);border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:11.5px}
+.rk{width:20px;height:20px;display:grid;place-items:center;background:var(--brass);color:#101A24;font-weight:600;font-size:11px}
+.cite{color:var(--ink)}
+.sc{color:var(--brass-b);font-variant-numeric:tabular-nums;margin-left:auto}
+.sb{width:84px;height:6px;background:var(--rule);display:block}
+.sb i{display:block;height:100%;background:var(--brass)}
+.hit p{margin:12px 14px 0;font-size:14.5px;line-height:1.6;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <nav class="crumbs">
+      <a href="https://mdzayd1003.github.io">Muhammad Zaid</a>
+      <span>/</span>
+      <a href="https://github.com/mdzayd1003/multi-agent-research-assistant">multi-agent-research-assistant</a>
+    </nav>
+    <h1>Corpus retrieval demo</h1>
+    <p class="sub">The from-scratch RAG retrieval pipeline running in the browser: splitting, hashed embeddings and exact cosine search.</p>
+  </div>
+</header>
+<main class="wrap">
+
+<section>
+  <p class="lead">The retrieval half of the research assistant, running in your browser over the
+  repository's sample corpus — 9 chunks from 3 documents. Recursive splitting,
+  a signed-hash embedder and exact cosine search, all written from scratch in the Python and
+  ported here unchanged.</p>
+
+  <div class="chips"><button class="chip" data-q="how are parse failures handled">how are parse failures handled</button><button class="chip" data-q="what does the critic agent do">what does the critic agent do</button><button class="chip" data-q="how does top-k vector search work">how does top-k vector search work</button><button class="chip" data-q="why is the revise loop capped">why is the revise loop capped</button><button class="chip" data-q="what is written to the trace">what is written to the trace</button></div>
+  <label class="eyebrow" for="q">Query</label>
+  <input type="text" id="q" value="how are parse failures handled" spellcheck="false">
+  <div class="ctl" style="margin-top:12px;max-width:260px">
+    <label>Chunks returned <b id="kv">4</b></label>
+    <input type="range" id="k" min="1" max="9" step="1" value="4">
+  </div>
+  <div id="res" style="margin-top:18px"></div>
+</section>
+
+<section>
+  <h2>What this is and isn't</h2>
+  <p class="lead">This is retrieval only. The agent layer — orchestrator, researcher, analyst,
+  writer, critic — needs a language model, which a static page cannot host; run the repository
+  locally with <code>--fake-llm</code> to exercise it with no model at all, or point it at Ollama.</p>
+  <p class="note">The scores are not approximations. Buckets and signs are computed with a
+  <b>blake2b implementation checked bit-for-bit against Python's hashlib</b> across all 2,313 corpus
+  tokens, so a query term the corpus has never seen lands in exactly the bucket Python would give
+  it. Verified against the Python retriever on five queries: identical ranking, and scores agreeing
+  to <b>1e-4</b> — which is the rounding on the vectors shipped with this page.</p>
+</section>
+<script>
+// BLAKE2b (RFC 7693), enough of it for short keyless digests with an optional salt.
+// Python's hashlib.blake2b is what the embedder hashes with, so the browser has to
+// compute the same buckets or the retrieval is not the same retrieval.
+const IV = [
+  0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn, 0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,
+  0x510e527fade682d1n, 0x9b05688c2b3e6c1fn, 0x1f83d9abfb41bd6bn, 0x5be0cd19137e2179n];
+const SIGMA = [
+  [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],[14,10,4,8,9,15,13,6,1,12,0,2,11,7,5,3],
+  [11,8,12,0,5,2,15,13,10,14,3,6,7,1,9,4],[7,9,3,1,13,12,11,14,2,6,5,10,4,0,15,8],
+  [9,0,5,7,2,4,10,15,14,1,11,12,6,8,3,13],[2,12,6,10,0,11,8,3,4,13,7,5,15,14,1,9],
+  [12,5,1,15,14,13,4,10,0,7,6,3,9,2,8,11],[13,11,7,14,12,1,3,9,5,0,15,4,8,6,2,10],
+  [6,15,14,9,11,3,0,8,12,2,13,7,1,4,10,5],[10,2,8,4,7,6,1,5,15,11,9,14,3,12,13,0],
+  [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],[14,10,4,8,9,15,13,6,1,12,0,2,11,7,5,3]];
+const M = 0xffffffffffffffffn;
+const rotr = (x, n) => ((x >> n) | (x << (64n - n))) & M;
+
+function compress(h, block, t, last) {
+  const v = [...h, ...IV];
+  v[12] ^= BigInt(t) & M;
+  v[13] ^= 0n;
+  if (last) v[14] ^= M;
+  const m = [];
+  for (let i = 0; i < 16; i++) {
+    let w = 0n;
+    for (let b = 7; b >= 0; b--) w = (w << 8n) | BigInt(block[i * 8 + b]);
+    m.push(w);
+  }
+  const G = (a, b, c, d, x, y) => {
+    v[a] = (v[a] + v[b] + x) & M; v[d] = rotr(v[d] ^ v[a], 32n);
+    v[c] = (v[c] + v[d]) & M;     v[b] = rotr(v[b] ^ v[c], 24n);
+    v[a] = (v[a] + v[b] + y) & M; v[d] = rotr(v[d] ^ v[a], 16n);
+    v[c] = (v[c] + v[d]) & M;     v[b] = rotr(v[b] ^ v[c], 63n);
+  };
+  for (let r = 0; r < 12; r++) {
+    const s = SIGMA[r];
+    G(0,4,8,12,m[s[0]],m[s[1]]);  G(1,5,9,13,m[s[2]],m[s[3]]);
+    G(2,6,10,14,m[s[4]],m[s[5]]); G(3,7,11,15,m[s[6]],m[s[7]]);
+    G(0,5,10,15,m[s[8]],m[s[9]]); G(1,6,11,12,m[s[10]],m[s[11]]);
+    G(2,7,8,13,m[s[12]],m[s[13]]);G(3,4,9,14,m[s[14]],m[s[15]]);
+  }
+  for (let i = 0; i < 8; i++) h[i] ^= v[i] ^ v[i + 8];
+}
+
+// digestSize bytes; salt is a byte array of at most 16, as hashlib takes it.
+function blake2b(bytes, digestSize, salt) {
+  const h = [...IV];
+  h[0] ^= 0x01010000n ^ BigInt(digestSize);
+  if (salt && salt.length) {
+    const s = new Uint8Array(16); s.set(salt);
+    for (let half = 0; half < 2; half++) {
+      let w = 0n;
+      for (let b = 7; b >= 0; b--) w = (w << 8n) | BigInt(s[half * 8 + b]);
+      h[4 + half] ^= w;
+    }
+  }
+  let t = 0;
+  const n = bytes.length;
+  let i = 0;
+  while (n - i > 128) { compress(h, bytes.subarray(i, i + 128), t += 128, false); i += 128; }
+  const last = new Uint8Array(128);
+  last.set(bytes.subarray(i));
+  compress(h, last, t + (n - i), true);
+
+  const out = new Uint8Array(digestSize);
+  for (let j = 0; j < digestSize; j++) out[j] = Number((h[j >> 3] >> BigInt(8 * (j & 7))) & 0xffn);
+  return out;
+}
+const enc = new TextEncoder();
+// int.from_bytes(digest, "big") % dim, matching embeddings._bucket
+function bucket(token, dim) {
+  const d = blake2b(enc.encode(token), 8, null);
+  let v = 0n; for (const b of d) v = (v << 8n) | BigInt(b);
+  return Number(v % BigInt(dim));
+}
+// embeddings._sign: blake2b(token, digest_size=1, salt=b"sign"), odd -> +1
+function signOf(token) {
+  return (blake2b(enc.encode(token), 1, enc.encode("sign"))[0] & 1) ? 1 : -1;
+}
+
+// Retrieval ported from research_assistant/{splitter,embeddings,vectorstore}.py.
+// Buckets and signs come from the same blake2b hashlib uses, so a query term absent
+// from the corpus lands exactly where Python puts it — which is what makes the
+// ranking identical rather than merely similar.
+const WORD_RE = /[a-z0-9]+/g;
+function tokenize(s){ return (s||"").toLowerCase().match(WORD_RE) || []; }
+function ngrams(s, n){
+  const c = tokenize(s).join(" "), out = [];
+  if (c.length < n) return c ? [c] : [];
+  for (let i = 0; i + n <= c.length; i++) out.push(c.slice(i, i + n));
+  return out;
+}
+const _bk = new Map(), _sg = new Map();
+function bucketOf(t, dim){ const k=t+"|"+dim; let v=_bk.get(k); if(v===undefined){v=bucket(t,dim);_bk.set(k,v);} return v; }
+function sgnOf(t){ let v=_sg.get(t); if(v===undefined){v=signOf(t);_sg.set(t,v);} return v; }
+
+function embed(text, D){
+  const counts = new Map();
+  for (const w of tokenize(text)){
+    const i = bucketOf("w:"+w, D.dim);
+    counts.set(i, (counts.get(i) || 0) + D.nw * sgnOf(w));
+  }
+  for (const g of ngrams(text, D.ngram)){
+    const i = bucketOf("c:"+g, D.dim);
+    counts.set(i, (counts.get(i) || 0) + D.ng * sgnOf(g));
+  }
+  const v = new Float64Array(D.dim);
+  for (const [i, x] of counts) v[i] = Math.sign(x) * Math.log1p(Math.abs(x));
+  let n = 0; for (const x of v) n += x * x;
+  n = Math.sqrt(n) || 1;
+  for (let i = 0; i < v.length; i++) v[i] /= n;
+  return v;
+}
+function search(query, D, k){
+  if (!query.trim()) return [];
+  const q = embed(query, D);
+  return D.vecs.map((row, i) => {
+    let s = 0; for (let j = 0; j < row.length; j++) s += row[j] * q[j];
+    return { i, score: s };
+  }).sort((a, b) => b.score - a.score).slice(0, k);
+}
+
+const DATA={"dim": 192, "ngram": 4, "nw": 1.0, "ng": 0.5, "chunks": [{"src": "agents.md", "i": 0, "text": "# The agent layer\n\n## One contract\n\nEvery agent speaks the same JSON contract: a `thought`, a list of `tool_calls`,\nand a `final` object that is null until the agent is done. Having one contract\nfor all four agents means the agent loop is written once and the roles differ\nonly in their system prompt.\n\n## The four roles"}, {"src": "agents.md", "i": 1, "text": "the agent loop is written once and the roles differ\nonly in their system prompt.\n\n## The four roles The **researcher** gathers evidence. It is expected to call `search_corpus`\nbefore answering and to carry citation tags into its reply. The **analyst**\nreasons over evidence the researcher collected and uses the calculator tool for\narithmetic. The **writer** turns findings into one coherent answer without\nintroducing new facts. The **critic** checks the draft against the evidence and\nreturns `{\"approved\": bool, \"issues\": [...]}`.\n\n## Parse failures are data"}, {"src": "agents.md", "i": 2, "text": "against the evidence and\nreturns `{\"approved\": bool, \"issues\": [...]}`.\n\n## Parse failures are data A reply that does not satisfy the contract raises `ParseFailure`, which is\nlogged to the trace and ends that agent's turn. It is never retried. Retrying a\nmalformed reply hides the exact behaviour worth measuring: how often the model\ncan hold a format under pressure.\n\n## The revise loop is capped\n\nThe orchestrator runs plan, dispatch, write, critique, and at most one revise\npass. An uncapped critic loop drifts and costs more; one pass catches the common\nfailure, which is a draft that cites nothing."}, {"src": "retrieval.md", "i": 0, "text": "# Retrieval in this project\n\nThe retrieval pipeline has four stages and none of them are hidden behind a\nframework abstraction.\n\n## Splitting\n\nDocuments are split by `RecursiveTextSplitter`, which walks a list of separators\nfrom coarse to fine: blank lines first, then single newlines, then sentence\npunctuation, then words, and finally a hard character cut. Adjacent pieces are\npacked greedily up to `chunk_size` and then re-overlapped by `chunk_overlap`\ncharacters so a sentence that straddles a boundary is still retrievable from\nboth sides.\n\n## Embedding"}, {"src": "retrieval.md", "i": 1, "text": "aracters so a sentence that straddles a boundary is still retrievable from\nboth sides.\n\n## Embedding The default embedder is a hashing embedder. Word unigrams and character\n4-grams are hashed into a fixed number of buckets with a sign drawn from a\nsecond hash, counts are scaled sublinearly with log1p, and the vector is L2\nnormalised. It needs no download, which is what makes the offline mode and the\ntest suite possible. `SentenceTransformerEmbedder` swaps in MiniLM when the\noptional extra is installed.\n\n## Indexing"}, {"src": "retrieval.md", "i": 2, "text": "le. `SentenceTransformerEmbedder` swaps in MiniLM when the\noptional extra is installed.\n\n## Indexing Vectors go into a store. The numpy store keeps a single float32 matrix and does\nan exact cosine search; because every vector is unit norm, cosine similarity is\njust a matrix product. FAISS `IndexFlatIP` is used instead when it is installed\nand the corpus is at least 2000 chunks, which is roughly where the exact search\nstops being free.\n\n## Top-k search"}, {"src": "retrieval.md", "i": 3, "text": "is at least 2000 chunks, which is roughly where the exact search\nstops being free.\n\n## Top-k search Top-k search scores the query against every stored vector and returns the k\nhighest. The implementation uses `argpartition` to find the k best without\nsorting the whole corpus, then sorts only those k. The retrieved chunks are\nrendered into the prompt as `[<source>#<chunk>] text`, and that citation tag is what\nagents are asked to carry through into their answers."}, {"src": "tracing.md", "i": 0, "text": "# Tracing\n\nEvery LLM call, tool call and agent-to-agent message is appended to a JSONL\nfile as it happens, with a run id and a monotonically increasing sequence\nnumber. Each line is flushed and fsynced, so a run that crashes still leaves a\nreadable trace up to the crash.\n\nEvent kinds are `run_start`, `llm_call`, `tool_call`, `message`,\n`parse_failure` and `run_end`. Long strings are truncated with an explicit\nmarker rather than silently cut, so you can tell a short tool result from a\ntrimmed one."}, {"src": "tracing.md", "i": 1, "text": "an explicit\nmarker rather than silently cut, so you can tell a short tool result from a\ntrimmed one. The trace is what makes the system debuggable: without it there is no way to\ntell whether the writer agent used what the researcher retrieved, or whether an\nanswer that looks well sourced was assembled from citations the model invented."}], "vecs": [[-0.10634, -0.04706, -0.04706, -0.04706, 0.10634, 0.04706, 0.04706, 0.0, 0.0, 0.04706, 0.04706, 0.08044, -0.04706, 0.0, 0.0, 0.10634, 0.0, 0.04706, -0.1275, -0.08044, -0.08044, -0.08044, 0.0, 0.0, 0.0, 0.16088, 0.0, 0.04706, 0.0, -0.04706, 0.0, 0.10634, 0.04706, -0.04706, 0.08044, 0.0, 0.0, -0.04706, 0.0, 0.08044, 0.0, -0.04706, 0.04706, -0.04706, -0.04706, 0.0, 0.1275, -0.04706, 0.0, 0.0, 0.04706, 0.08044, -0.08044, -0.08044, 0.0, 0.04706, 0.1275, 0.0, 0.04706, 0.0, -0.10634, 0.04706, 0.08044, -0.04706, 0.10634, -0.1275, 0.04706, 0.18678, 0.04706, -0.04706, -0.04706, 0.0, -0.04706, 0.08044, -0.19784, 0.04706, 0.04706, -0.08044, 0.04706, 0.0, 0.0, 0.04706, -0.14539, -0.10634, 0.0, -0.04706, -0.04706, 0.08044, 0.0, 0.08044, 0.0, 0.04706, 0.04706, 0.0, -0.04706, -0.04706, 0.0, -0.10634, -0.08044, 0.0, 0.0, -0.04706, -0.10634, 0.10634, 0.04706, 0.0, -0.08044, 0.0, -0.04706, -0.08044, -0.1275, -0.10634, -0.22583, 0.04706, -0.04706, 0.0, 0.04706, 0.0, 0.1275, 0.14539, 0.0, 0.0, -0.08044, 0.1275, 0.0, 0.0, 0.0, 0.0, 0.18678, -0.08044, -0.08044, 0.08044, 0.04706, 0.04706, 0.10634, 0.0, 0.08044, 0.0, 0.0, 0.0, 0.08044, 0.17455, 0.0, 0.0, -0.10634, -0.04706, -0.04706, -0.04706, 0.04706, -0.08044, 0.0, 0.0, 0.10634, -0.10634, 0.04706, -0.10634, 0.04706, 0.16088, 0.0, -0.04706, 0.0, 0.0, -0.04706, -0.04706, 0.04706, 0.0, -0.04706, -0.08044, -0.04706, -0.04706, 0.08044, -0.04706, 0.08044, -0.04706, -0.08044, -0.04706, 0.04706, 0.08044, 0.04706, -0.08044, 0.0, 0.04706, 0.04706, -0.1275, -0.08044, 0.0, -0.04706, 0.0, 0.10634, -0.16088, 0.1275, 0.0], [-0.06932, 0.0, -0.06932, 0.04055, 0.09164, 0.06932, 0.09164, 0.0, -0.12529, 0.0, 0.0, 0.04055, -0.06932, -0.10987, 0.04055, 0.06932, 0.0, -0.04055, -0.09164, 0.09164, 0.0, -0.10987, 0.06932, 0.06932, 0.06932, 0.17049, 0.04055, 0.12529, -0.09164, -0.04055, -0.06932, -0.04055, 0.06932, 0.10987, 0.06932, 0.04055, 0.0, 0.0, 0.06932, 0.09164, 0.09164, -0.04055, 0.04055, 0.04055, -0.10987, 0.06932, 0.06932, -0.10987, -0.04055, 0.04055, -0.06932, 0.06932, -0.06932, -0.09164, 0.0, 0.06932, 0.04055, 0.04055, 0.04055, -0.06932, 0.04055, 0.06932, 0.0, -0.12529, -0.04055, 0.10987, -0.09164, 0.04055, 0.06932, -0.09164, -0.04055, 0.0, 0.09164, 0.04055, -0.06932, 0.09164, 0.04055, 0.04055, 0.06932, 0.06932, 0.10987, 0.04055, -0.16096, -0.06932, 0.0, -0.06932, 0.0, -0.06932, -0.10987, 0.09164, 0.06932, 0.04055, 0.0, 0.0, 0.0, -0.10987, 0.04055, 0.04055, -0.06932, 0.0, -0.04055, -0.04055, -0.04055, 0.10987, 0.06932, -0.06932, -0.06932, 0.06932, 0.0, -0.04055, -0.06932, 0.09164, -0.25652, -0.04055, -0.04055, 0.0, 0.04055, 0.04055, 0.06932, 0.09164, -0.04055, 0.04055, -0.06932, 0.1872, 0.06932, 0.09164, -0.10987, -0.04055, 0.06932, 0.06932, -0.15042, -0.09164, 0.04055, 0.04055, 0.0, 0.04055, 0.06932, 0.0, 0.0, -0.04055, 0.04055, 0.09164, 0.0, -0.04055, -0.10987, -0.04055, -0.06932, 0.0, 0.04055, 0.0, 0.04055, 0.06932, 0.0, -0.09164, -0.09164, -0.06932, 0.04055, -0.06932, 0.06932, 0.0, 0.06932, -0.10987, -0.04055, 0.04055, 0.04055, 0.06932, -0.04055, -0.09164, 0.10987, 0.04055, 0.06932, 0.0, 0.04055, 0.10987, -0.12529, 0.0, 0.04055, -0.06932, 0.09164, 0.0, -0.09164, 0.04055, 0.04055, -0.06932, 0.0, -0.06932, 0.09164, 0.10987, 0.06932, -0.09164, 0.0, 0.10987], [0.0, 0.0, 0.0, 0.03846, 0.06575, 0.03846, 0.06575, 0.0, -0.06575, 0.10421, 0.0, -0.03846, 0.0, -0.10421, 0.06575, 0.06575, -0.03846, -0.06575, -0.11883, 0.03846, -0.08691, -0.10421, 0.08691, 0.06575, 0.08691, 0.1617, -0.08691, 0.10421, -0.06575, -0.03846, 0.06575, 0.06575, 0.0, 0.06575, 0.03846, 0.06575, 0.06575, -0.06575, 0.03846, 0.0, 0.10421, 0.06575, 0.03846, -0.08691, -0.08691, 0.03846, 0.03846, -0.10421, 0.10421, -0.08691, -0.03846, 0.0, -0.10421, 0.08691, 0.0, 0.0, 0.0, 0.0, -0.03846, 0.0, -0.03846, -0.03846, -0.03846, 0.14267, 0.0, -0.08691, 0.0, 0.14267, 0.03846, -0.03846, -0.03846, 0.0, -0.08691, -0.06575, -0.08691, 0.0, 0.03846, -0.08691, 0.1315, 0.03846, 0.03846, 0.03846, -0.17755, -0.14267, -0.03846, -0.03846, 0.08691, -0.08691, -0.08691, 0.0, 0.06575, 0.03846, 0.0, -0.10421, -0.06575, 0.03846, -0.08691, 0.03846, 0.03846, 0.0, 0.03846, -0.03846, 0.06575, 0.15266, 0.08691, -0.03846, 0.0, 0.06575, 0.10421, -0.11883, -0.03846, -0.03846, -0.20299, 0.0, -0.11883, 0.03846, 0.06575, 0.0, -0.06575, 0.06575, -0.10421, -0.03846, -0.03846, 0.15266, 0.06575, 0.08691, 0.03846, 0.0, 0.03846, 0.06575, -0.08691, 0.06575, 0.0, -0.06575, 0.06575, 0.08691, 0.0, 0.03846, -0.08691, -0.03846, 0.14267, -0.08691, 0.03846, 0.0, 0.08691, -0.03846, -0.06575, -0.06575, 0.0, 0.0, 0.10421, 0.08691, 0.14267, -0.08691, -0.03846, 0.0, -0.11883, 0.08691, -0.06575, 0.03846, 0.03846, -0.10421, 0.06575, -0.06575, 0.06575, 0.06575, -0.08691, -0.08691, 0.06575, -0.03846, 0.08691, 0.0, 0.0, 0.08691, -0.03846, 0.03846, 0.08691, -0.08691, 0.0, 0.10421, -0.10421, 0.08691, 0.03846, -0.08691, 0.03846, 0.08691, -0.08691, 0.03846, 0.06575, -0.03846, -0.06575, -0.03846], [-0.04077, -0.0697, -0.11047, 0.11047, -0.09214, -0.04077, -0.0697, -0.0697, -0.0697, -0.04077, 0.0, 0.0, 0.0, 0.12597, 0.0697, 0.09214, 0.0, -0.11047, 0.0697, -0.04077, -0.04077, 0.0, 0.0697, 0.0, 0.15124, 0.1394, 0.0697, -0.04077, -0.04077, 0.0, 0.04077, 0.04077, -0.0697, 0.04077, 0.04077, -0.04077, -0.0697, 0.0697, 0.0697, 0.04077, 0.0, 0.09214, 0.1394, -0.04077, 0.0, -0.12597, 0.12597, -0.04077, 0.09214, -0.04077, -0.11047, -0.09214, -0.09214, 0.0, -0.04077, 0.04077, 0.04077, 0.0697, 0.0, 0.0, 0.09214, 0.04077, 0.12597, 0.0, 0.04077, 0.09214, 0.0697, 0.16184, 0.09214, -0.04077, -0.09214, -0.04077, 0.0697, -0.04077, 0.0697, 0.0, 0.0, 0.0, 0.0697, 0.04077, -0.17142, 0.0, -0.15124, -0.09214, 0.0, -0.04077, 0.1394, -0.1394, 0.0, 0.0697, 0.15124, 0.0697, -0.1394, 0.04077, 0.0697, -0.04077, -0.04077, 0.04077, 0.0, 0.04077, -0.04077, 0.0697, -0.04077, 0.0697, 0.0, -0.09214, -0.04077, 0.11047, 0.18822, -0.09214, 0.04077, 0.04077, 0.0, -0.0697, 0.04077, 0.04077, 0.04077, 0.0, 0.0, 0.0, 0.04077, 0.04077, -0.09214, 0.11047, 0.0, 0.0697, 0.04077, -0.0697, -0.15124, 0.0, 0.04077, -0.04077, 0.0697, -0.0697, 0.0, 0.04077, 0.04077, -0.04077, 0.0, 0.04077, 0.0697, 0.0, 0.0, -0.09214, 0.04077, -0.04077, 0.04077, -0.04077, 0.0, 0.0, 0.04077, 0.0, 0.04077, 0.09214, -0.12597, 0.0, -0.0697, -0.04077, -0.16184, 0.0, 0.04077, -0.04077, 0.0697, 0.0, 0.12597, -0.04077, -0.12597, -0.12597, -0.04077, 0.11047, -0.04077, 0.04077, -0.0697, 0.04077, -0.09214, 0.0697, -0.11047, -0.04077, 0.11047, 0.0697, 0.0, 0.04077, 0.0, 0.04077, 0.04077, -0.11047, 0.0, -0.1394, 0.0697, 0.04077, 0.0697, 0.0], [-0.04056, -0.04056, -0.1253, 0.09165, -0.04056, 0.04056, 0.0, 0.0, 0.06933, -0.04056, 0.04056, 0.13866, -0.09165, 0.06933, 0.0, 0.06933, -0.06933, -0.06933, 0.0, -0.1253, 0.09165, 0.0, -0.09165, -0.04056, 0.09165, 0.09165, 0.09165, 0.0, 0.0, -0.04056, 0.06933, -0.06933, 0.10988, -0.1253, 0.0, -0.06933, 0.0, -0.06933, 0.10988, 0.04056, 0.0, 0.0, 0.06933, -0.04056, -0.09165, -0.06933, 0.09165, 0.06933, 0.10988, 0.04056, 0.04056, -0.04056, -0.1253, 0.0, -0.04056, -0.04056, -0.06933, 0.0, 0.0, 0.0, 0.06933, 0.1253, 0.06933, -0.04056, 0.16098, 0.06933, 0.09165, 0.17051, -0.04056, -0.10988, -0.15044, 0.1253, 0.06933, -0.09165, 0.0, 0.0, -0.06933, -0.09165, 0.04056, -0.06933, 0.0, 0.04056, -0.15044, -0.06933, 0.04056, -0.09165, 0.04056, -0.09165, 0.06933, 0.10988, 0.06933, 0.06933, -0.1253, -0.06933, 0.0, 0.0, -0.04056, 0.0, 0.04056, -0.06933, 0.0, 0.0, 0.0, 0.20153, 0.0, -0.10988, 0.0, 0.04056, 0.09165, 0.0, 0.04056, 0.04056, -0.20799, -0.06933, -0.10988, 0.0, 0.0, -0.09165, 0.04056, 0.04056, -0.06933, 0.0, 0.06933, 0.13866, 0.0, -0.09165, 0.04056, -0.06933, -0.04056, -0.10988, 0.06933, -0.04056, -0.06933, 0.0, -0.09165, -0.06933, -0.04056, 0.06933, 0.0, 0.04056, 0.10988, -0.09165, 0.04056, 0.04056, 0.04056, -0.06933, 0.06933, -0.09165, -0.06933, -0.04056, -0.04056, -0.06933, 0.04056, 0.0, -0.06933, -0.09165, 0.0, 0.0, -0.1253, -0.04056, 0.0, -0.06933, 0.04056, -0.04056, 0.06933, -0.09165, 0.04056, 0.0, -0.06933, 0.06933, 0.04056, -0.06933, 0.0, 0.06933, -0.04056, 0.0, 0.0, 0.0, 0.1253, 0.09165, -0.04056, -0.04056, -0.04056, 0.04056, 0.04056, -0.04056, -0.06933, -0.04056, 0.13866, 0.0, 0.06933, -0.09165], [0.09684, -0.07326, -0.11611, 0.07326, -0.07326, 0.09684, 0.0, -0.04285, -0.04285, -0.04285, 0.04285, 0.04285, -0.04285, -0.09684, 0.07326, 0.11611, -0.04285, -0.07326, 0.09684, 0.09684, 0.0, -0.07326, 0.07326, -0.04285, 0.07326, 0.0, 0.0, -0.04285, 0.07326, -0.07326, -0.04285, -0.07326, 0.04285, -0.07326, 0.07326, -0.07326, 0.0, 0.0, 0.04285, -0.09684, 0.0, -0.07326, 0.0, 0.0, -0.07326, -0.09684, -0.11611, 0.04285, 0.04285, 0.04285, 0.04285, 0.07326, -0.14652, 0.0, 0.0, 0.04285, 0.07326, -0.04285, 0.0, 0.0, 0.0, -0.07326, 0.07326, -0.04285, 0.07326, -0.04285, 0.04285, 0.1701, -0.04285, 0.0, -0.13241, 0.09684, -0.11611, -0.04285, -0.13241, 0.0, -0.07326, 0.04285, -0.07326, 0.13241, 0.0, 0.07326, -0.13241, 0.0, 0.0, 0.0, 0.0, 0.0, -0.07326, 0.07326, 0.0, 0.0, 0.04285, -0.09684, 0.0, -0.04285, 0.04285, 0.13241, 0.04285, 0.04285, 0.04285, -0.09684, 0.0, 0.23223, -0.04285, -0.04285, 0.09684, 0.07326, -0.04285, 0.09684, 0.0, -0.04285, -0.18937, 0.04285, -0.18937, 0.0, -0.07326, 0.0, 0.04285, 0.04285, 0.04285, 0.04285, 0.0, 0.04285, -0.13241, 0.0, -0.04285, 0.09684, 0.0, -0.07326, -0.09684, -0.04285, -0.04285, 0.0, 0.0, -0.09684, 0.0, 0.0, -0.07326, 0.09684, -0.04285, -0.04285, -0.07326, 0.04285, 0.09684, 0.0, -0.07326, -0.04285, 0.0, 0.0, -0.04285, -0.09684, 0.04285, -0.04285, 0.04285, -0.04285, 0.09684, 0.0, 0.13241, 0.0, 0.04285, 0.0, 0.04285, 0.04285, 0.07326, 0.0, 0.11611, -0.07326, 0.04285, -0.07326, 0.13241, 0.09684, -0.07326, 0.0, 0.04285, 0.09684, -0.07326, 0.0, 0.13241, 0.0, -0.11611, -0.04285, -0.09684, -0.07326, 0.0, 0.07326, 0.0, 0.15897, 0.15897, 0.07326, 0.07326, 0.04285], [0.04228, -0.07228, -0.15685, 0.0, -0.04228, 0.04228, 0.0, -0.09555, -0.09555, -0.07228, 0.11457, 0.0, -0.13064, -0.09555, -0.07228, 0.07228, 0.04228, -0.04228, 0.04228, 0.0, -0.04228, -0.07228, 0.04228, -0.04228, 0.13064, 0.18685, 0.07228, 0.04228, 0.0, -0.07228, -0.04228, -0.04228, -0.04228, 0.0, 0.07228, 0.04228, -0.04228, 0.07228, 0.07228, 0.07228, 0.09555, 0.0, -0.04228, 0.0, -0.04228, 0.04228, -0.04228, -0.04228, 0.04228, 0.04228, -0.04228, 0.0, -0.16784, 0.0, -0.04228, 0.04228, 0.11457, -0.04228, 0.04228, -0.09555, 0.04228, 0.04228, 0.0, 0.0, 0.07228, 0.07228, 0.0, 0.0, 0.07228, 0.04228, -0.07228, 0.04228, -0.04228, 0.04228, 0.04228, -0.09555, -0.04228, 0.04228, -0.04228, 0.07228, -0.11457, 0.09555, -0.13064, 0.0, -0.04228, -0.09555, 0.0, -0.04228, 0.0, 0.13064, 0.11457, 0.07228, -0.13064, 0.04228, -0.09555, -0.09555, 0.0, 0.04228, -0.07228, 0.0, 0.04228, -0.15685, -0.04228, 0.14457, 0.0, -0.04228, 0.0, 0.11457, 0.11457, 0.04228, 0.0, 0.09555, -0.23477, 0.0, -0.07228, 0.04228, -0.07228, -0.07228, -0.11457, 0.0, 0.0, 0.04228, -0.13064, 0.16784, -0.04228, 0.09555, -0.04228, -0.04228, 0.04228, -0.07228, 0.04228, -0.04228, -0.04228, 0.0, 0.04228, -0.09555, 0.07228, 0.07228, -0.07228, -0.04228, 0.07228, 0.0, -0.04228, 0.0, -0.09555, -0.09555, -0.04228, 0.0, -0.04228, 0.0, 0.04228, 0.0, 0.0, 0.0, -0.07228, -0.04228, 0.0, 0.0, 0.09555, 0.07228, 0.0, 0.04228, 0.0, 0.07228, 0.09555, 0.04228, 0.07228, -0.15685, -0.04228, -0.07228, 0.0, 0.04228, -0.07228, -0.07228, -0.09555, 0.09555, -0.13064, 0.04228, 0.0, 0.0, 0.09555, 0.07228, 0.04228, -0.07228, -0.09555, 0.09555, 0.07228, 0.14457, 0.07228, -0.04228, 0.04228, 0.09555], [0.0, 0.04399, -0.04399, 0.13592, 0.04399, 0.1192, 0.04399, 0.0, -0.09941, -0.0752, 0.0752, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0752, 0.0, -0.1192, -0.0752, -0.15041, 0.0, 0.0, 0.09941, 0.0752, 0.09941, 0.09941, 0.04399, -0.0752, 0.0, -0.04399, -0.1192, -0.04399, -0.04399, 0.04399, -0.04399, 0.0, 0.0, 0.0, 0.0, 0.0, -0.04399, -0.04399, -0.1192, 0.0, -0.0752, 0.04399, 0.0752, -0.0752, 0.0752, 0.04399, -0.1192, 0.0, 0.0, -0.04399, -0.0752, -0.0752, -0.0752, 0.0, -0.0752, 0.04399, -0.04399, -0.0752, -0.0752, -0.09941, 0.0752, 0.24426, 0.04399, -0.04399, 0.0752, -0.04399, -0.0752, 0.0, 0.04399, 0.04399, 0.04399, -0.09941, 0.04399, -0.0752, 0.0, -0.04399, -0.17462, -0.04399, 0.0, 0.1192, 0.04399, 0.0, 0.0, -0.04399, 0.13592, -0.04399, 0.0, 0.0, -0.1192, -0.13592, 0.04399, 0.0752, 0.0752, 0.09941, -0.04399, -0.04399, 0.04399, 0.09941, 0.0752, 0.0752, 0.0752, 0.0752, -0.04399, -0.04399, 0.0752, -0.04399, -0.0752, 0.13592, 0.09941, 0.0, 0.0, 0.0752, 0.0, 0.09941, 0.0, 0.04399, 0.0752, 0.1192, 0.09941, 0.16319, 0.1192, 0.0, 0.09941, 0.0, 0.0752, 0.04399, -0.04399, 0.0, -0.1192, -0.0752, 0.0, 0.0752, -0.0752, -0.09941, 0.09941, 0.0752, 0.0, -0.04399, 0.04399, 0.1192, -0.04399, 0.0, -0.0752, 0.0, 0.0752, 0.0, 0.09941, -0.13592, -0.09941, 0.0, 0.0, -0.1192, -0.04399, 0.0, -0.04399, -0.04399, 0.04399, 0.04399, 0.0, 0.04399, 0.0, 0.0, 0.04399, 0.0, -0.04399, -0.04399, 0.04399, 0.0, -0.16319, -0.04399, 0.04399, 0.04399, -0.04399, -0.04399, 0.04399, 0.0, -0.09941, -0.09941, 0.04399, -0.17462, 0.04399, 0.1192, -0.0752, -0.04399, 0.0752, -0.09941], [-0.08627, 0.0, -0.08627, 0.08627, -0.05046, 0.0, -0.08627, 0.0, -0.05046, -0.05046, 0.05046, 0.0, -0.05046, 0.08627, 0.05046, 0.0, 0.0, 0.05046, -0.05046, 0.05046, 0.0, 0.05046, 0.05046, 0.15591, 0.08627, 0.2003, 0.13673, 0.05046, -0.05046, -0.08627, -0.05046, 0.05046, -0.11404, -0.08627, 0.13673, 0.05046, 0.0, -0.05046, 0.0, 0.0, 0.0, 0.0, 0.11404, -0.08627, 0.0, 0.0, 0.0, 0.0, 0.0, 0.08627, -0.05046, -0.08627, 0.11404, -0.08627, -0.05046, 0.0, 0.0, -0.08627, -0.05046, -0.05046, 0.0, 0.0, -0.05046, -0.05046, 0.05046, -0.05046, 0.05046, 0.13673, 0.05046, 0.05046, 0.0, -0.05046, -0.13673, 0.0, 0.0, 0.05046, 0.0, 0.0, 0.05046, 0.08627, -0.05046, -0.05046, 0.08627, -0.13673, 0.0, 0.0, -0.05046, -0.05046, 0.0, 0.08627, 0.05046, -0.11404, -0.05046, 0.05046, 0.0, -0.08627, 0.0, 0.0, -0.05046, 0.0, -0.05046, 0.0, 0.0, 0.05046, -0.05046, 0.05046, 0.13673, 0.08627, 0.05046, -0.11404, -0.05046, -0.05046, -0.24218, 0.08627, -0.05046, 0.0, -0.05046, 0.05046, -0.08627, 0.0, -0.05046, 0.0, 0.13673, 0.18719, 0.05046, -0.15591, -0.05046, 0.0, 0.0, 0.13673, 0.05046, 0.0, -0.05046, 0.05046, -0.08627, 0.05046, -0.11404, 0.05046, 0.0, -0.05046, 0.08627, 0.05046, 0.0, 0.05046, 0.05046, 0.05046, 0.0, 0.0, 0.11404, 0.05046, 0.05046, 0.0, 0.05046, -0.05046, -0.15591, 0.0, 0.05046, -0.13673, -0.11404, -0.08627, 0.11404, -0.08627, 0.08627, 0.05046, 0.05046, 0.05046, 0.0, -0.08627, 0.08627, 0.0, 0.0, 0.0, -0.05046, 0.18719, -0.13673, -0.05046, -0.08627, 0.0, -0.05046, 0.05046, 0.0, -0.05046, -0.05046, -0.13673, 0.0, 0.05046, 0.05046, 0.11404, 0.05046, -0.11404, 0.0, 0.0]]};
+
+const $=s=>document.querySelector(s);
+function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function hl(text, terms){
+  let out = esc(text);
+  const seen = new Set();
+  for (const t of terms.filter(t=>t.length>3).sort((a,b)=>b.length-a.length)){
+    if (seen.has(t)) continue; seen.add(t);
+    out = out.replace(new RegExp("\\b("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi"), "<mark>$1</mark>");
+  }
+  return out;
+}
+function run(){
+  const q = $("#q").value;
+  const k = parseInt($("#k").value, 10);
+  $("#kv").textContent = k;
+  const hits = search(q, DATA, k);
+  const terms = tokenize(q);
+  $("#res").innerHTML = hits.length ? hits.map((h, rank) => {
+    const c = DATA.chunks[h.i];
+    return `<article class="hit">
+      <div class="hh"><span class="rk">${rank+1}</span>
+        <span class="cite">${c.src}#${c.i}</span>
+        <span class="sc">${h.score.toFixed(4)}</span>
+        <span class="sb"><i style="width:${Math.max(1, h.score*100).toFixed(1)}%"></i></span></div>
+      <p>${hl(c.text, terms)}</p></article>`;
+  }).join("") : '<p class="note">Type a question to search the corpus.</p>';
+}
+$("#q").addEventListener("input", run);
+$("#k").addEventListener("input", run);
+document.querySelectorAll("[data-q]").forEach(b=>b.addEventListener("click",()=>{
+  $("#q").value=b.dataset.q; run(); $("#q").focus();}));
+run();
+
+</script>
+</main>
+<footer class="bot">
+  <div class="wrap">
+    
+    <p><a href="https://github.com/mdzayd1003/multi-agent-research-assistant">Source on GitHub</a> ·
+       <a href="https://mdzayd1003.github.io">All projects</a></p>
+  </div>
+</footer>
+</body>
+</html>
